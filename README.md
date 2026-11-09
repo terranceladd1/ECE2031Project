@@ -3,7 +3,7 @@
 A time-based I/O peripheral for SCOMP: an independent countdown with a done flag and a drift-free periodic tick, at I/O addresses 0x020–0x023.
 
 - **Programmer's Reference Manual:** https://docs.google.com/document/d/1wXg2tX60ipIZ6WCXmOE4ErOo9tXZ6VG4BwRyAMGlQ2M/edit
-- **Roadmap:** spec freeze Nov 10 · integration Nov 18 · first board test Nov 20 · feature freeze Nov 23 · demo-ready Nov 24
+- **Roadmap:** spec freeze Nov 10 · integration Nov 18 · first board test Nov 20 · feature freeze Nov 23 
 
 ## What's in this repo
 
