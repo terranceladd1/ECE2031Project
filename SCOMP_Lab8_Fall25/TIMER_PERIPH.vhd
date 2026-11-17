@@ -29,7 +29,6 @@ architecture rtl of TIMER_PERIPH is
     signal period, interval_left : unsigned(15 downto 0);
     signal pending : std_logic;
     signal scale : unsigned(1 downto 0);
-    -- count clock cycles between ticks; natural means a nonnegative integer
     signal cd_phase : natural range 0 to CLOCK_HZ - 1;       -- countdown tick progress
     signal int_phase : natural range 0 to CLOCK_HZ / 10 - 1; -- periodic tick progress
     signal cd_limit : positive range 1 to CLOCK_HZ;          -- cycles needed per countdown tick
@@ -38,21 +37,18 @@ begin
     assert CLOCK_HZ >= 100 and CLOCK_HZ mod 100 = 0
         report "CLOCK_HZ must be a multiple of 100 Hz" severity failure;
     -- select how many clock cycles make one countdown tick
-    -- the phase counters start at zero, so a tick happens at limit minus one
     with scale select cd_limit <=
         CLOCK_HZ when "00", -- 1 second
         CLOCK_HZ / 10 when "01", -- 0.1 seconds
         CLOCK_HZ / 100 when others; -- 0.01 seconds for scale 2
 
-    -- choose what the cpu reads based on the address
-    -- & joins bits together; unused upper bits are filled with zeros
     with IO_ADDR select read_data <=
         std_logic_vector(remaining) when CD_VAL, 
-        (15 downto 1 => '0') & done when CD_CTRL,       -- done in bit 0
-        (15 downto 1 => '0') & pending when INT_PERIOD, -- event flag in bit 0
-        (15 downto 2 => '0') & std_logic_vector(scale) when TIMER_SCALE, -- scale in bits 1..0
-        (others => '0') when others;                    -- default value for other addresses
-    -- drive the bus only when reading one of our addresses outside reset
+        (15 downto 1 => '0') & done when CD_CTRL,       
+        (15 downto 1 => '0') & pending when INT_PERIOD, 
+        (15 downto 2 => '0') & std_logic_vector(scale) when TIMER_SCALE, 
+        (others => '0') when others; 
+    
     IO_DATA <= read_data when RESETN = '1' and IO_READ = '1' and IO_WRITE = '0'
         and (IO_ADDR = CD_VAL or IO_ADDR = CD_CTRL
              or IO_ADDR = INT_PERIOD or IO_ADDR = TIMER_SCALE)
