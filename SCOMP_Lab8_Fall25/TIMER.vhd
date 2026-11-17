@@ -30,8 +30,17 @@ ENTITY TIMER IS
 END TIMER;
 
 ARCHITECTURE a OF TIMER IS
-	SIGNAL COUNT     : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL IO_EN     : STD_LOGIC;
+	-- Drive Stuff
+  SIGNAL io_read_data   : STD_LOGIC_VECTOR(15 DOWNTO 0);
+  SIGNAL io_drive_en    : STD_LOGIC;
+  SIGNAL cs_timer       : STD_LOGIC;
+  SIGNAL addr_sel       : STD_LOGIC_VECTOR(1 DOWNTO 0);
+
+	-- Counter Stuff
+  SIGNAL cd_val_reg     : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"0000";
+  SIGNAL cd_ctrl_reg    : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"0000";
+  SIGNAL int_period_reg : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"0000";
+  SIGNAL timer_scale_reg: STD_LOGIC_VECTOR(15 DOWNTO 0) := x"0001";
 
 	BEGIN
 	
