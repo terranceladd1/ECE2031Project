@@ -43,17 +43,27 @@ ARCHITECTURE a OF TIMER IS
   SIGNAL timer_scale_reg: STD_LOGIC_VECTOR(15 DOWNTO 0) := x"0001";
 
 	BEGIN
-	
+
+	cs_timer <= '1' WHEN (IO_ADDR(10 DOWNTO 2) = "000011100") ELSE '0';
+	addr_sel <= IO_ADDR(1 DOWNTO 0);
+
+	io_drive_en <= '1' WHEN (cs_timer = '1' AND CS = '1' AND IO_READ = '1') ELSE '0';
+
 	-- Use LPM function to create bidirection I/O data bus
 	IO_BUS: lpm_bustri
-	GENERIC MAP (
-		lpm_width => 16
-	)
-	PORT MAP (
-		data     => COUNT,
-		enabledt => IO_EN,
-		tridata  => IO_DATA
-	);
+	GENERIC MAP ( lpm_width =>; 16 )
+  PORT MAP (
+		data => io_read_data,
+    enabledt => io_drive_en,
+    tridata => IO_DATA
+  );
+
+	WITH addr_sel SELECT
+		io_read_data <= cd_val_reg WHEN "00",
+										cd_ctrl_reg WHEN "01",
+										int_period_reg WHEN "10",
+										timer_scale_reg WHEN "11",
+										x"0000" WHEN OTHERS;
 
 	PROCESS (CLOCK, RESETN, IO_ADDR, IO_READ)
 	BEGIN
