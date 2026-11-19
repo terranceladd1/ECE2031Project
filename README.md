@@ -1,8 +1,9 @@
 # SCOMP Timer Peripheral (ECE 2031 Project)
 
-A time-based I/O peripheral for SCOMP: an independent countdown with a done flag and a drift-free periodic tick, at I/O addresses 0x020–0x023.
+A time-based I/O peripheral for SCOMP: an independent countdown with a done flag and a drift-free periodic tick, at I/O addresses 0x070–0x073 within the course-reserved range 0x070–0x07F.
 
-- **Programmer's Reference Manual:** https://docs.google.com/document/d/1wXg2tX60ipIZ6WCXmOE4ErOo9tXZ6VG4BwRyAMGlQ2M/edit
+- **Register Map:** https://docs.google.com/document/d/1MqQJpHz38CJbJ5rJvDWZvqNIUWdX6qTd-m8o5Bhb5qs/edit
+- **Programmer's Reference Manual (draft; use the register map above for current addresses):** https://docs.google.com/document/d/1wXg2tX60ipIZ6WCXmOE4ErOo9tXZ6VG4BwRyAMGlQ2M/edit
 - **Roadmap:** spec freeze Nov 10 · integration Nov 18 · first board test Nov 20 · feature freeze Nov 23 
 
 ## What's in this repo
@@ -11,7 +12,7 @@ The Quartus project lives in `SCOMP_Lab8_Fall25/`. Keep all project files inside
 
 | File(s) in `SCOMP_Lab8_Fall25/` | What it is | Owner |
 |---|---|---|
-| `TIMER_PERIPH.vhd` (to be added) | The new peripheral | Role 1 (logic), Role 2 (ports, decode, bus) |
+| `TIMER_PERIPH.vhd` (not yet wired into the project) | The new peripheral | Role 1 (logic), Role 2 (ports, decode, bus) |
 | `SCOMP_System.bdf` | Top-level schematic | Role 2 |
 | `SCOMP.vhd` | The processor (unchanged except the `.mif` name) | Role 2 |
 | `*.vwf` | Simulation tests | Role 3 |
