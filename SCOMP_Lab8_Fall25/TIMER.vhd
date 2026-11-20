@@ -20,7 +20,6 @@ ENTITY TIMER IS
 	PORT(
     CLOCK       : IN    STD_LOGIC;
     RESETN      : IN    STD_LOGIC;
-    CS          : IN    STD_LOGIC := '1';
     IO_WRITE    : IN    STD_LOGIC;
     IO_READ     : IN    STD_LOGIC;
     IO_ADDR     : IN    STD_LOGIC_VECTOR(10 DOWNTO 0);
@@ -28,7 +27,7 @@ ENTITY TIMER IS
 	);
 END TIMER;
 
-architecture rtl of TIMER_PERIPH is
+architecture rtl of TIMER is
 
     -- addresses 070 through 073
     constant CD_VAL      : std_logic_vector(10 downto 0) := "00001110000";
@@ -66,14 +65,6 @@ begin
         and (IO_ADDR = CD_VAL or IO_ADDR = CD_CTRL
              or IO_ADDR = INT_PERIOD or IO_ADDR = TIMER_SCALE)
         else (others => 'Z'); -- release the bus so other devices can use it
-
-	IO_BUS: lpm_bustri
-	GENERIC MAP ( lpm_width => 16 )
-	PORT MAP (
-		data	=> read_data,
-		enabledt=> '1',
-		tridata => IO_DATA
-	);
 
     process (CLOCK, RESETN)
     begin
