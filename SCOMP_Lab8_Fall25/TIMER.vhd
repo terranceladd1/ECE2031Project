@@ -9,12 +9,14 @@ LIBRARY IEEE;
 LIBRARY LPM;
 
 USE IEEE.STD_LOGIC_1164.ALL;
+use ieee.numeric_std.all;
 USE IEEE.STD_LOGIC_ARITH.ALL;
 USE IEEE.STD_LOGIC_UNSIGNED.ALL;
 USE LPM.LPM_COMPONENTS.ALL;
 
 
 ENTITY TIMER IS
+	generic (CLOCK_HZ : positive := 10000000);
 	PORT(
     CLOCK       : IN    STD_LOGIC;
     RESETN      : IN    STD_LOGIC;
@@ -23,61 +25,161 @@ ENTITY TIMER IS
     IO_READ     : IN    STD_LOGIC;
     IO_ADDR     : IN    STD_LOGIC_VECTOR(10 DOWNTO 0);
     IO_DATA     : INOUT STD_LOGIC_VECTOR(15 DOWNTO 0);
-    CLK_100HZ   : IN    STD_LOGIC := '0';
-    CLK_10HZ    : IN    STD_LOGIC := '0';
-    CLK_1HZ     : IN    STD_LOGIC := '0'
 	);
 END TIMER;
 
-ARCHITECTURE a OF TIMER IS
-	-- Drive Stuff
-  SIGNAL io_read_data   : STD_LOGIC_VECTOR(15 DOWNTO 0);
-  SIGNAL io_drive_en    : STD_LOGIC;
-  SIGNAL cs_timer       : STD_LOGIC;
-  SIGNAL addr_sel       : STD_LOGIC_VECTOR(1 DOWNTO 0);
+architecture rtl of TIMER_PERIPH is
 
-	-- Counter Stuff
-  SIGNAL cd_val_reg     : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"0000";
-  SIGNAL cd_ctrl_reg    : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"0000";
-  SIGNAL int_period_reg : STD_LOGIC_VECTOR(15 DOWNTO 0) := x"0000";
-  SIGNAL timer_scale_reg: STD_LOGIC_VECTOR(15 DOWNTO 0) := x"0001";
+    -- addresses 070 through 073
+    constant CD_VAL      : std_logic_vector(10 downto 0) := "00001110000";
+    constant CD_CTRL     : std_logic_vector(10 downto 0) := "00001110001";
+    constant INT_PERIOD  : std_logic_vector(10 downto 0) := "00001110010";
+    constant TIMER_SCALE : std_logic_vector(10 downto 0) := "00001110011";
+    signal read_data : std_logic_vector(15 downto 0);
 
-	BEGIN
+    signal remaining, preset : unsigned(15 downto 0);
+    signal running, done : std_logic;
+    signal period, interval_left : unsigned(15 downto 0);
+    signal pending : std_logic;
+    signal scale : unsigned(1 downto 0);
+    signal cd_phase : natural range 0 to CLOCK_HZ - 1;       -- countdown tick progress
+    signal int_phase : natural range 0 to CLOCK_HZ / 10 - 1; -- periodic tick progress
+    signal cd_limit : positive range 1 to CLOCK_HZ;          -- cycles needed per countdown tick
+begin
+    -- check that dividing the clock into 0.01 s ticks gives a whole number
+    assert CLOCK_HZ >= 100 and CLOCK_HZ mod 100 = 0
+        report "CLOCK_HZ must be a multiple of 100 Hz" severity failure;
+    -- select how many clock cycles make one countdown tick
+    with scale select cd_limit <=
+        CLOCK_HZ when "00", -- 1 second
+        CLOCK_HZ / 10 when "01", -- 0.1 seconds
+        CLOCK_HZ / 100 when others; -- 0.01 seconds for scale 2
 
-	cs_timer <= '1' WHEN (IO_ADDR(10 DOWNTO 2) = "000011100") ELSE '0';
-	addr_sel <= IO_ADDR(1 DOWNTO 0);
+    with IO_ADDR select read_data <=
+        std_logic_vector(remaining) when CD_VAL, 
+        (15 downto 1 => '0') & done when CD_CTRL,       
+        (15 downto 1 => '0') & pending when INT_PERIOD, 
+        (15 downto 2 => '0') & std_logic_vector(scale) when TIMER_SCALE, 
+        (others => '0') when others; 
+    
+    IO_DATA <= read_data when RESETN = '1' and IO_READ = '1' and IO_WRITE = '0'
+        and (IO_ADDR = CD_VAL or IO_ADDR = CD_CTRL
+             or IO_ADDR = INT_PERIOD or IO_ADDR = TIMER_SCALE)
+        else (others => 'Z'); -- release the bus so other devices can use it
 
-	io_drive_en <= '1' WHEN (cs_timer = '1' AND CS = '1' AND IO_READ = '1') ELSE '0';
-
-	-- Use LPM function to create bidirection I/O data bus
 	IO_BUS: lpm_bustri
-	GENERIC MAP ( lpm_width =>; 16 )
-  PORT MAP (
-		data => io_read_data,
-    enabledt => io_drive_en,
-    tridata => IO_DATA
-  );
+	GENERIC MAP ( lpm_width => 16 )
+	PORT MAP (
+		data	=> read_data,
+		enabledt=> '1',
+		tridata => IO_DATA
+	);
 
-	WITH addr_sel SELECT
-		io_read_data <= cd_val_reg WHEN "00",
-										cd_ctrl_reg WHEN "01",
-										int_period_reg WHEN "10",
-										timer_scale_reg WHEN "11",
-										x"0000" WHEN OTHERS;
+    process (CLOCK, RESETN)
+    begin
+        if RESETN = '0' then
+            remaining <= (others => '0');
+            preset <= (others => '0');
+            running <= '0';
+            done <= '0';
+            period <= (others => '0');
+            interval_left <= (others => '0');
+            pending <= '0';
+            scale <= "01";
+            cd_phase <= 0;
+            int_phase <= 0;
+        elsif rising_edge(CLOCK) then
+            if running = '1' then
+                if cd_phase = cd_limit - 1 then
+                    cd_phase <= 0;
+                    remaining <= remaining - 1;
+                    if remaining = 1 then
+                        running <= '0';
+                        done <= '1';
+                    end if;
+                else
+                    cd_phase <= cd_phase + 1;
+                end if;
+            end if;
 
-	PROCESS (CLOCK, RESETN, IO_ADDR, IO_READ)
-	BEGIN
-		IF (RESETN = '0' OR ((IO_ADDR = "00000000010") AND (IO_WRITE = '1'))) THEN
-			COUNT <= x"0000";
-		ELSIF (rising_edge(CLOCK)) THEN
-			COUNT <= COUNT + 1;
-		END IF;
-	END PROCESS;
-	
-	-- Drive IO_DATA when requested.
-	IO_EN <=
-		'1' WHEN (IO_ADDR = "00000000010") AND (IO_READ = '1')
-		ELSE '0';
+            if IO_READ = '1' and IO_WRITE = '0' and IO_ADDR = INT_PERIOD then
+                pending <= '0'; -- reading clears the old event
+            end if;
+            if period /= 0 then
+                if int_phase = CLOCK_HZ / 10 - 1 then
+                    int_phase <= 0;
+                    if interval_left = 1 then
+                        interval_left <= period;
+                        pending <= '1'; -- keep a new event if a read happens too
+                    else
+                        interval_left <= interval_left - 1;
+                    end if;
+                else
+                    int_phase <= int_phase + 1;
+                end if;
+            end if;
 
-END a;
+            -- writes below take priority over a tick on the same edge
+            if IO_WRITE = '1' then
+                case IO_ADDR is
+                    when CD_VAL =>
+                        preset <= unsigned(IO_DATA);
+                        remaining <= unsigned(IO_DATA);
+                        cd_phase <= 0;
+                        if IO_DATA = x"0000" then
+                            running <= '0';
+                            done <= '1';
+                        else
+                            running <= '1';
+                            done <= '0';
+                        end if;
+                    when CD_CTRL =>
+                        case IO_DATA is
+                            when x"0000" => -- pause
+                                running <= '0';
+                                remaining <= remaining; -- cancel a same-edge tick
+                                cd_phase <= cd_phase;
+                                done <= done;
+                            when x"0001" => -- resume
+                                if remaining /= 0 and running = '0' then
+                                    running <= '1';
+                                end if;
+                            when x"0002" => -- reload
+                                remaining <= preset;
+                                cd_phase <= 0;
+                                if preset = 0 then
+                                    running <= '0';
+                                    done <= '1';
+                                else
+                                    running <= '1';
+                                    done <= '0';
+                                end if;
+                            when x"0003" => -- clear
+                                remaining <= (others => '0');
+                                cd_phase <= 0;
+                                running <= '0';
+                                done <= '0';
+                            when others => null;
+                        end case;
+                    when INT_PERIOD =>
+                        period <= unsigned(IO_DATA);
+                        interval_left <= unsigned(IO_DATA);
+                        int_phase <= 0;
+                        pending <= '0';
+                    when TIMER_SCALE =>
+                        if unsigned(IO_DATA) <= 2 then
+                            scale <= unsigned(IO_DATA(1 downto 0));
+                            if unsigned(IO_DATA(1 downto 0)) /= scale then
+                                cd_phase <= 0; -- start a full tick at the new scale
+                                remaining <= remaining;
+                                running <= running;
+                                done <= done;
+                            end if;
+                        end if;
+                    when others => null;
+                end case;
+            end if;
+        end if;
+    end process;
+end rtl;
 

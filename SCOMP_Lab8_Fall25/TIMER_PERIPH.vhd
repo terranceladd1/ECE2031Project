@@ -1,7 +1,12 @@
 -- use the same 10 mhz clock as scomp
 library ieee;
+LIBRARY LPM;
+
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+USE IEEE.STD_LOGIC_ARITH.ALL;
+USE IEEE.STD_LOGIC_UNSIGNED.ALL;
+USE LPM.LPM_COMPONENTS.ALL;
 
 entity TIMER_PERIPH is
     generic (CLOCK_HZ : positive := 10000000);
